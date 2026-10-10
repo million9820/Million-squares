@@ -1,0 +1,197 @@
+index.html 
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Million Squares</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #111827;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+header { padding: 18px 10px; }
+h1 { margin: 0 0 8px; font-size: 26px; }
+p { color: #cbd5e1; }
+#map {
+  display: block;
+  width: 100%;
+  height: 65vh;
+  min-height: 300px;
+  background: #d1d5db;
+  touch-action: none;
+}
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px;
+}
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 12px 17px;
+  font-size: 16px;
+  font-weight: bold;
+}
+#status { padding: 8px 12px 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗺️ Million Squares</h1>
+  <p>1 000 000 квадратів · Знайди свій!</p>
+</header>
+
+<canvas id="map"></canvas>
+
+<div class="controls">
+  <button id="minus">➖</button>
+  <button id="plus">➕</button>
+  <button id="reset">↩️ Центр</button>
+</div>
+
+<div id="status">Пересувай мапу пальцем або наближай її кнопками.</div>
+
+<script>
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+const status = document.getElementById("status");
+
+const total = 1000;
+let scale = 0.7;
+let ox = 0;
+let oy = 0;
+let selected = null;
+let dragging = false;
+let moved = false;
+let lastX = 0;
+let lastY = 0;
+let startX = 0;
+let startY = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * dpr;
+  canvas.height = canvas.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+function draw() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#d1d5db";
+  ctx.fillRect(0, 0, w, h);
+
+  const step = scale < 0.45 ? 10 : 1;
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  const x0 = Math.max(0, Math.floor(-ox / scale / step) * step);
+  const x1 = Math.min(total, Math.ceil((w - ox) / scale / step) * step);
+  const y0 = Math.max(0, Math.floor(-oy / scale / step) * step);
+  const y1 = Math.min(total, Math.ceil((h - oy) / scale / step) * step);
+
+  for (let x = x0; x <= x1; x += step) {
+    const px = ox + x * scale;
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, h);
+  }
+  for (let y = y0; y <= y1; y += step) {
+    const py = oy + y * scale;
+    ctx.moveTo(0, py);
+    ctx.lineTo(w, py);
+  }
+  ctx.stroke();
+
+  if (selected) {
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(
+      ox + selected.x * scale,
+      oy + selected.y * scale,
+      scale, scale
+    );
+  }
+}
+
+function zoom(factor, cx, cy) {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  cx = cx ?? w / 2;
+  cy = cy ?? h / 2;
+
+  const old = scale;
+  scale = Math.max(0.08, Math.min(40, scale * factor));
+  ox = cx - (cx - ox) * scale / old;
+  oy = cy - (cy - oy) * scale / old;
+  draw();
+}
+
+canvas.addEventListener("pointerdown", e => {
+  dragging = true;
+  moved = false;
+  lastX = startX = e.clientX;
+  lastY = startY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  if (Math.abs(e.clientX - startX) +
+      Math.abs(e.clientY - startY) > 5) moved = true;
+  ox += dx;
+  oy += dy;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  draw();
+});
+
+canvas.addEventListener("pointerup", e => {
+  dragging = false;
+  if (moved) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left - ox) / scale);
+  const y = Math.floor((e.clientY - rect.top - oy) / scale);
+
+  if (x >= 0 && x < total && y >= 0 && y < total) {
+    selected = {x, y};
+    status.textContent =
+      `Квадрат ${x + 1}, ${y + 1} · Вільний · Ціна залежить від кількості твоїх покупок`;
+    draw();
+  }
+});
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  zoom(e.deltaY < 0 ? 1.2 : 0.83,
+       e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+document.getElementById("plus").onclick = () => zoom(1.5);
+document.getElementById("minus").onclick = () => zoom(0.67);
+document.getElementById("reset").onclick = () => {
+  scale = 0.7;
+  ox = 0;
+  oy = 0;
+  selected = null;
+  status.textContent = "Мапу повернуто до початкового вигляду.";
+  draw();
+};
+
+window.addEventListener("resize", resize);
+resize();
+</script>
+</body>
+</html>
